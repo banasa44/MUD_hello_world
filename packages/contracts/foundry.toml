@@ -24,6 +24,7 @@ fs_permissions = [{ access = "read", path = "./"}]
 
 [profile.garnet]
 eth_rpc_url = "https://rpc.garnetchain.com"
+private_key = { env = "PRIVATE_KEY" }
 
 [profile.redstone]
 eth_rpc_url = "https://rpc.redstonechain.com"

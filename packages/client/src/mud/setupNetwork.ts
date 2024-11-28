@@ -66,6 +66,8 @@ export async function setupNetwork() {
    * (see https://viem.sh/docs/clients/wallet.html).
    */
   const burnerAccount = createBurnerAccount(networkConfig.privateKey as Hex);
+  console.log("Burner Account Address:", burnerAccount.address);
+
   const burnerWalletClient = createWalletClient({
     ...clientOptions,
     account: burnerAccount,

@@ -6,7 +6,7 @@ import "./Counter.css";
 export const Counter = () => {
   const {
     components: { Counter },
-    systemCalls: { increment },
+    systemCalls: { increment, decrement },
   } = useMUD();
 
   // Access the current counter value
@@ -23,6 +23,15 @@ export const Counter = () => {
         }}
       >
         Increment
+      </button>
+      <button
+        type="button"
+        onClick={async (event) => {
+          event.preventDefault();
+          console.log("new counter value:", await decrement());
+        }}
+      >
+        Decrement
       </button>
     </div>
   );
