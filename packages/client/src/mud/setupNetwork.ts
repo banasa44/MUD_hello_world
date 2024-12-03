@@ -11,7 +11,9 @@ import {
   createWalletClient,
   Hex,
   ClientConfig,
+  custom,
   getContract,
+  Address,
 } from "viem";
 import { encodeEntity, syncToRecs } from "@latticexyz/store-sync/recs";
 
@@ -37,6 +39,7 @@ import { Subject, share } from "rxjs";
  * for the source of this information.
  */
 import mudConfig from "contracts/mud.config";
+import { MetaMaskInpageProvider } from "@metamask/providers";
 
 export type SetupNetworkResult = Awaited<ReturnType<typeof setupNetwork>>;
 
@@ -65,23 +68,61 @@ export async function setupNetwork() {
    * Create a temporary wallet and a viem client for it
    * (see https://viem.sh/docs/clients/wallet.html).
    */
-  const burnerAccount = createBurnerAccount(networkConfig.privateKey as Hex);
-  console.log("Burner Account Address:", burnerAccount.address);
+  // Wallet Client Initialization
+  let walletClient;
+  let connectedAddress: Address | undefined;
 
-  const burnerWalletClient = createWalletClient({
-    ...clientOptions,
-    account: burnerAccount,
-  })
-    .extend(transactionQueue())
-    .extend(writeObserver({ onWrite: (write) => write$.next(write) }));
+  if (import.meta.env.VITE_USE_METAMASK === "true") {
+    console.log("Using MetaMask for wallet connection");
 
+    if (!window.ethereum) {
+      console.error(
+        "MetaMask not detected. Ensure it is installed and accessible."
+      );
+      throw new Error("MetaMask is not installed or not detected.");
+    }
+
+    const ethereum = window.ethereum as MetaMaskInpageProvider;
+
+    // Request MetaMask accounts
+    const accounts = (await ethereum.request({
+      method: "eth_requestAccounts",
+    })) as string[];
+    if (!accounts || accounts.length === 0) {
+      throw new Error("No accounts found in MetaMask.");
+    }
+    connectedAddress = accounts[0] as Address;
+    console.log("Connected MetaMask Address:", connectedAddress);
+
+    // Create a wallet client using MetaMask
+    walletClient = createWalletClient({
+      chain: networkConfig.chain,
+      transport: custom(window.ethereum!),
+      account: connectedAddress as Address, // Explicitly cast the account
+    })
+      .extend(transactionQueue()) // Ensure proper transaction management
+      .extend(writeObserver({ onWrite: (write) => write$.next(write) })); // Observe transaction writes
+  } else {
+    console.log("Using burner wallet for wallet connection");
+
+    // Use the burner private key from networkConfig
+    const burnerAccount = createBurnerAccount(networkConfig.privateKey);
+    connectedAddress = burnerAccount.address;
+
+    walletClient = createWalletClient({
+      ...clientOptions,
+      account: burnerAccount,
+    })
+      .extend(transactionQueue()) // Ensure proper transaction management
+      .extend(writeObserver({ onWrite: (write) => write$.next(write) })); // Observe transaction writes
+  }
   /*
    * Create an object for communicating with the deployed World.
    */
   const worldContract = getContract({
     address: networkConfig.worldAddress as Hex,
     abi: IWorldAbi,
-    client: { public: publicClient, wallet: burnerWalletClient },
+    client: { public: publicClient, wallet: walletClient },
   });
 
   /*
@@ -117,10 +158,10 @@ export async function setupNetwork() {
     components,
     playerEntity: encodeEntity(
       { address: "address" },
-      { address: burnerWalletClient.account.address }
+      { address: connectedAddress }
     ),
     publicClient,
-    walletClient: burnerWalletClient,
+    walletClient,
     latestBlock$,
     storedBlockLogs$,
     waitForTransaction,
